@@ -1,3 +1,4 @@
+import os
 from functools import cached_property
 from pathlib import Path
 
@@ -38,6 +39,7 @@ class PromptConfig(BaseModel):
     context: dict[str, str] = Field(default_factory=dict)
     normalize_prompts: bool = True
     context_placeholder: str = "<<{value}>>"
+    include_agents_md: bool = True
 
     # --- Prompts ---
     inline_prompt_files: list[FilePath] | None = None
@@ -59,6 +61,16 @@ class PromptConfig(BaseModel):
     include_summary_system_prompts: bool = True
     include_inline_reply_system_prompts: bool = True
     include_summary_reply_system_prompts: bool = True
+
+    # --- Load AGENTS.md ---
+    def _load_agents_md(self) -> str | None:
+        """Load AGENTS.md from the current working directory if it exists."""
+        if not self.include_agents_md:
+            return None
+        agents_md_path = Path(os.getcwd()) / "AGENTS.md"
+        if agents_md_path.exists():
+            return agents_md_path.read_text(encoding="utf-8")
+        return None
 
     # --- Prompts ---
     @cached_property
@@ -139,17 +151,25 @@ class PromptConfig(BaseModel):
         return [file.read_text(encoding="utf-8") for file in self.summary_reply_prompt_files_or_default]
 
     # --- Load System Prompts ---
+    def _load_with_agents_md(self, files: list[Path]) -> list[str]:
+        """Load prompt files and prepend AGENTS.md if available."""
+        prompts = [file.read_text(encoding="utf-8") for file in files]
+        agents_md = self._load_agents_md()
+        if agents_md:
+            prompts.insert(0, agents_md)
+        return prompts
+
     def load_system_inline(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_inline_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_inline_prompt_files_or_default)
 
     def load_system_context(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_context_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_context_prompt_files_or_default)
 
     def load_system_summary(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_summary_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_summary_prompt_files_or_default)
 
     def load_system_inline_reply(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_inline_reply_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_inline_reply_prompt_files_or_default)
 
     def load_system_summary_reply(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_summary_reply_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_summary_reply_prompt_files_or_default)
