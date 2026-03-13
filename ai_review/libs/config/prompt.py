@@ -90,7 +90,9 @@ class PromptConfig(BaseModel):
             agents_md_path = repo_root / "AGENTS.md"
             if agents_md_path.exists():
                 print(f"Loading AGENTS.md from: {agents_md_path}")
-                return agents_md_path.read_text(encoding="utf-8")
+                content = agents_md_path.read_text(encoding="utf-8")
+                print(f"AGENTS.md content:\n{content}")
+                return content
 
         return None
 
