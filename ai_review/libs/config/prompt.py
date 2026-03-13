@@ -69,6 +69,7 @@ class PromptConfig(BaseModel):
             return None
         agents_md_path = Path(os.getcwd()) / "AGENTS.md"
         if agents_md_path.exists():
+            print(f"Loading AGENTS.md from: {agents_md_path}")
             return agents_md_path.read_text(encoding="utf-8")
         return None
 
