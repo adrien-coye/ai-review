@@ -1,4 +1,4 @@
-import os
+import subprocess
 from functools import cached_property
 from pathlib import Path
 
@@ -63,14 +63,35 @@ class PromptConfig(BaseModel):
     include_summary_reply_system_prompts: bool = True
 
     # --- Load AGENTS.md ---
+    def _get_git_repo_root(self) -> Path | None:
+        """Get the root directory of the current git repository."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            repo_root = result.stdout.strip()
+            if repo_root:
+                return Path(repo_root)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        return None
+
     def _load_agents_md(self) -> str | None:
-        """Load AGENTS.md from the current working directory if it exists."""
+        """Load AGENTS.md from the git repository root if it exists."""
         if not self.include_agents_md:
             return None
-        agents_md_path = Path(os.getcwd()) / "AGENTS.md"
-        if agents_md_path.exists():
-            print(f"Loading AGENTS.md from: {agents_md_path}")
-            return agents_md_path.read_text(encoding="utf-8")
+
+        # Try to get the git repository root
+        repo_root = self._get_git_repo_root()
+        if repo_root:
+            agents_md_path = repo_root / "AGENTS.md"
+            if agents_md_path.exists():
+                print(f"Loading AGENTS.md from: {agents_md_path}")
+                return agents_md_path.read_text(encoding="utf-8")
+
         return None
 
     # --- Prompts ---
