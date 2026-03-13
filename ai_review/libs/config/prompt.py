@@ -1,3 +1,4 @@
+import subprocess
 from functools import cached_property
 from pathlib import Path
 
@@ -38,6 +39,7 @@ class PromptConfig(BaseModel):
     context: dict[str, str] = Field(default_factory=dict)
     normalize_prompts: bool = True
     context_placeholder: str = "<<{value}>>"
+    include_agents_md: bool = True
 
     # --- Prompts ---
     inline_prompt_files: list[FilePath] | None = None
@@ -59,6 +61,40 @@ class PromptConfig(BaseModel):
     include_summary_system_prompts: bool = True
     include_inline_reply_system_prompts: bool = True
     include_summary_reply_system_prompts: bool = True
+
+    # --- Load AGENTS.md ---
+    def _get_git_repo_root(self) -> Path | None:
+        """Get the root directory of the current git repository."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            repo_root = result.stdout.strip()
+            if repo_root:
+                return Path(repo_root)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        return None
+
+    def _load_agents_md(self) -> str | None:
+        """Load AGENTS.md from the git repository root if it exists."""
+        if not self.include_agents_md:
+            return None
+
+        # Try to get the git repository root
+        repo_root = self._get_git_repo_root()
+        if repo_root:
+            agents_md_path = repo_root / "AGENTS.md"
+            if agents_md_path.exists():
+                print(f"Loading AGENTS.md from: {agents_md_path}")
+                content = agents_md_path.read_text(encoding="utf-8")
+                print(f"AGENTS.md content:\n{content}")
+                return content
+
+        return None
 
     # --- Prompts ---
     @cached_property
@@ -139,17 +175,25 @@ class PromptConfig(BaseModel):
         return [file.read_text(encoding="utf-8") for file in self.summary_reply_prompt_files_or_default]
 
     # --- Load System Prompts ---
+    def _load_with_agents_md(self, files: list[Path]) -> list[str]:
+        """Load prompt files and prepend AGENTS.md if available."""
+        prompts = [file.read_text(encoding="utf-8") for file in files]
+        agents_md = self._load_agents_md()
+        if agents_md:
+            prompts.insert(0, agents_md)
+        return prompts
+
     def load_system_inline(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_inline_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_inline_prompt_files_or_default)
 
     def load_system_context(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_context_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_context_prompt_files_or_default)
 
     def load_system_summary(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_summary_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_summary_prompt_files_or_default)
 
     def load_system_inline_reply(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_inline_reply_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_inline_reply_prompt_files_or_default)
 
     def load_system_summary_reply(self) -> list[str]:
-        return [file.read_text(encoding="utf-8") for file in self.system_summary_reply_prompt_files_or_default]
+        return self._load_with_agents_md(self.system_summary_reply_prompt_files_or_default)
